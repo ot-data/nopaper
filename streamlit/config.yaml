@@ -1,0 +1,24 @@
+aws:
+  region: ${AWS_REGION}
+  bedrock_model: ${BEDROCK_MODEL_NAME}
+  s3_kb_id: ${KB_ID}
+  access_key: ${AWS_ACCESS_KEY_ID}
+  secret_key: ${AWS_SECRET_ACCESS_KEY}
+  model_arn:  ${BEDROCK_MODEL_ARN}
+
+retrieval:
+  num_results: 10
+  min_score: 0.5
+  source_field: "source_url"  # Adjust if your metadata uses a different field
+
+
+cache:
+  enabled: true
+  expiry_seconds: 3600  # 1 hour
+
+agent:
+  agent_id: ${AGENT_ID} # From Bedrock Console
+  alias_id: ${ALIAS_ID}       # Or your custom alias
+
+websocket:
+  url: "ws://localhost:8000/chat"
