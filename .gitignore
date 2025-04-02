@@ -6,3 +6,4 @@ logs/
 tests/__pycache__/
 tests/*.log
 agentenv/
+.vscode/

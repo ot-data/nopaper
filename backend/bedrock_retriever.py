@@ -251,7 +251,12 @@ class EnhancedBedrockRetriever:
         try:
             response = self.bedrock_client.retrieve(
                 knowledgeBaseId=self.kb_id,
-                retrievalQuery={"text": query},
+                retrievalQuery={
+                    "text": query,
+                    "filters": {
+                        "customer_id": customer_id  
+                }
+                },
                 retrievalConfiguration={
                     "vectorSearchConfiguration": {
                         "numberOfResults": self.num_results
