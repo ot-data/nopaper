@@ -201,8 +201,8 @@ class EnhancedBedrockRetriever:
         self.region = config["aws"]["region"]
         self.access_key = config["aws"]["access_key"]
         self.secret_key = config["aws"]["secret_key"]
-        self.num_results = config["retrieval"].get("num_results", 5)
-        self.min_score = config["retrieval"].get("min_score", 0.5)
+        self.num_results = 5#config["retrieval"].get("num_results", 5)
+        self.min_score = 0.5#config["retrieval"].get("min_score", 0.5)
         
         self.session = boto3.Session(
             aws_access_key_id=self.access_key,

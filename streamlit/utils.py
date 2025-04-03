@@ -107,18 +107,18 @@ def is_relevant_query(query: str, config: Optional[Dict] = None) -> bool:
     return False
 
 def get_cached_answer(question: str, cache: Dict, config: Dict) -> Optional[str]:
-    if not config["cache"]["enabled"]:
+    if not True:#config["cache"]["enabled"]:
         return None
     normalized_q = preprocess_query(question)
     if normalized_q in cache:
         entry = cache[normalized_q]
-        expiry_seconds = config["cache"]["expiry_seconds"]
+        expiry_seconds = 3600#config["cache"]["expiry_seconds"]
         if datetime.now() - entry["timestamp"] < timedelta(seconds=expiry_seconds):
             return entry["answer"]
     return None
 
 def cache_answer(question: str, answer: str, cache: Dict, config: Dict):
-    if config["cache"]["enabled"]:
+    if True:#config["cache"]["enabled"]:
         normalized_q = preprocess_query(question)
         cache[normalized_q] = {
             "answer": answer,
