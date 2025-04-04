@@ -4,6 +4,8 @@ services:
   backend:
     build:
       context: ./backend
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     networks:
@@ -12,6 +14,8 @@ services:
   frontend:
     build:
       context: ./streamlit
+    env_file:
+      - .env
     ports:
       - "80:80"
     depends_on:
