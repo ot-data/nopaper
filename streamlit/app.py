@@ -6,7 +6,12 @@ import json
 import queue
 import threading
 
-from utils import load_config, set_aws_credentials
+# Import configuration and utilities
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from config import get_full_config, set_aws_credentials, WEBSOCKET_URL
+from utils import load_config
 from memory import ConversationMemory
 
 # WebSocket Chat Client
@@ -70,39 +75,30 @@ class WebSocketChatClient:
 
 def main():
     st.set_page_config(page_title="LPU Knowledge Assistant", page_icon="🎓")
-    
-    # Load configuration
-    # config = load_config()
 
-    # script_dir = os.path.dirname(os.path.abspath(__file__))
-    # config_path = os.path.join(script_dir, "config.yaml")
-
-
+    # Load configuration directly from environment variables
     try:
         config = load_config()
-        set_aws_credentials(config)
+        set_aws_credentials()
     except Exception as e:
-        (f"Error loading configuration: {e}")
+        st.error(f"Error loading configuration: {e}")
         config = {}
 
-
-    
     # Initialize memory
     memory = ConversationMemory(max_history=5)
-    
-    # WebSocket URL (update this with your actual WebSocket server URL)
-    WEBSOCKET_URL = "ws://localhost:8000/chat"
+
+    # Use WebSocket URL from config
     chat_client = WebSocketChatClient(WEBSOCKET_URL)
 
     # Title
     st.title("🎓 LPU Knowledge Assistant")
-    
+
     # Sidebar for Personal Information
     with st.sidebar:
         st.header("Personal Information")
         student_id = st.text_input("Student ID (optional)", "")
         program = st.text_input("Program of Interest (optional)", "")
-        
+
         # Personal info dictionary
         personal_info = {}
         if student_id:
@@ -128,7 +124,7 @@ def main():
     if submit_button and user_query:
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": user_query})
-        
+
         # Display user message
         with st.chat_message("user"):
             st.markdown(user_query)
@@ -137,19 +133,19 @@ def main():
         with st.chat_message("assistant"):
             response_placeholder = st.empty()
             full_response = ""
-            
+
             # Stream the response from WebSocket
             try:
                 for chunk in chat_client.stream_response(user_query, personal_info):
                     full_response += chunk
                     response_placeholder.markdown(full_response + "▌")
-                
+
                 response_placeholder.markdown(full_response)
-                
+
                 # Add to memory and session state
                 memory.add_interaction(user_query, full_response)
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
-                
+
             except Exception as e:
                 error_msg = f"Connection error: {str(e)}"
                 response_placeholder.markdown(error_msg)

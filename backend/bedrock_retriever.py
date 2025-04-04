@@ -13,7 +13,7 @@
 #         self.secret_key = config["aws"]["secret_key"]
 #         self.num_results = config["retrieval"].get("num_results", 5)
 #         self.min_score = config["retrieval"].get("min_score", 0.5)
-        
+
 #         self.session = boto3.Session(
 #             aws_access_key_id=self.access_key,
 #             aws_secret_access_key=self.secret_key,
@@ -21,7 +21,7 @@
 #         )
 #         self.bedrock_client = self.session.client("bedrock-agent-runtime")
 #         self.s3_client = self.session.client("s3")
-        
+
 #         self.synonyms = {
 #             "lpu": ["lovely professional university", "lpu university", "lovely university"],
 #             "fee": ["fees", "tuition", "cost", "payment"],
@@ -119,24 +119,24 @@
 #     def get_specific_source_urls(self, response: Dict, indices: List[int] = None) -> str:
 #         if "error" in response:
 #             return ""
-        
+
 #         results = response.get("retrievalResults", [])
 #         if not results:
 #             return ""
-        
+
 #         formatted_urls = []
 #         for i, result in enumerate(results, 1):
 #             if indices and i not in indices:
 #                 continue
-                
+
 #             location = result.get('location', {})
 #             s3_location = location.get('s3Location', {})
 #             source_url = s3_location.get('uri', 'Source URL not available')
-            
+
 #             if source_url != 'Source URL not available':
 #                 markdown_link = self.format_as_link(source_url)
 #                 formatted_urls.append(f"- Source {i}: {markdown_link}")
-        
+
 #         return "\n".join(formatted_urls)
 
 #     def format_retrieval_results(self, response: Dict, use_html=False) -> (str, str):
@@ -145,7 +145,7 @@
 #         results = response.get("retrievalResults", [])
 #         if not results:
 #             return "No relevant content found in knowledge base.", ""
-        
+
 #         formatted_content = []
 #         reference_links = []
 
@@ -165,10 +165,10 @@
 #                 #     display_url = self.get_presigned_url(source_url)
 #                 # else:
 #                 display_url = source_url
-                
+
 #                 filename = os.path.basename(source_url.split("?")[0])
 #                 reference_links.append(f"- [{filename}]({display_url})")
-                
+
 #                 formatted_content.append(
 #                     f"SOURCE {i} [Score: {score}]:\nContent: {content}\nSource URL: {source_url}\n"
 #                 )
@@ -177,7 +177,7 @@
 
 #         if not formatted_content:
 #             return "No relevant content with available sources found in knowledge base.", ""
-        
+
 #         return "\n".join(formatted_content), "\n".join(reference_links)
 
 #     def get_relevant_context(self, query: str) -> str:
@@ -197,13 +197,17 @@ from typing import Dict, List, Any
 class EnhancedBedrockRetriever:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
+
+        # Get AWS configuration from config
         self.kb_id = config["aws"]["s3_kb_id"]
         self.region = config["aws"]["region"]
         self.access_key = config["aws"]["access_key"]
         self.secret_key = config["aws"]["secret_key"]
-        self.num_results = 5#config["retrieval"].get("num_results", 5)
-        self.min_score = 0.5#config["retrieval"].get("min_score", 0.5)
-        
+
+        # Get retrieval configuration
+        self.num_results = config["retrieval"]["num_results"]
+        self.min_score = config["retrieval"]["min_score"]
+
         self.session = boto3.Session(
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
@@ -211,7 +215,7 @@ class EnhancedBedrockRetriever:
         )
         self.bedrock_client = self.session.client("bedrock-agent-runtime")
         self.s3_client = self.session.client("s3")
-        
+
         self.synonyms = {
             "lpu": ["lovely professional university", "lpu university", "lovely university"],
             "fee": ["fees", "tuition", "cost", "payment"],
@@ -254,7 +258,7 @@ class EnhancedBedrockRetriever:
                 retrievalQuery={
                     "text": query,
                     "filters": {
-                        "customer_id": customer_id  
+                        "customer_id": customer_id
                 }
                 },
                 retrievalConfiguration={
@@ -314,24 +318,24 @@ class EnhancedBedrockRetriever:
     def get_specific_source_urls(self, response: Dict, indices: List[int] = None) -> str:
         if "error" in response:
             return ""
-        
+
         results = response.get("retrievalResults", [])
         if not results:
             return ""
-        
+
         formatted_urls = []
         for i, result in enumerate(results, 1):
             if indices and i not in indices:
                 continue
-                
+
             location = result.get('location', {})
             s3_location = location.get('s3Location', {})
             source_url = s3_location.get('uri', 'Source URL not available')
-            
+
             if source_url != 'Source URL not available':
                 markdown_link = self.format_as_link(source_url)
                 formatted_urls.append(f"- Source {i}: {markdown_link}")
-        
+
         return "\n".join(formatted_urls)
 
 
@@ -356,7 +360,7 @@ class EnhancedBedrockRetriever:
             # Only allow WEB sources, ignore S3 sources
             if location.get("type") == "WEB":
                 source_url = location.get("webLocation", {}).get("url", None)
-            
+
             if source_url and source_url not in seen_sources:
                 reference_links.append(f"- [View Document]({source_url})")
                 seen_sources.add(source_url)
@@ -381,7 +385,7 @@ class EnhancedBedrockRetriever:
     # def format_retrieval_results(self, response: Dict) -> (str, str):
     #     if "error" in response:
     #         return f"Retrieval Error: {response['error']}", ""
-        
+
     #     results = response.get("retrievalResults", [])
     #     if not results:
     #         return "No relevant content found in knowledge base.", ""
@@ -407,14 +411,14 @@ class EnhancedBedrockRetriever:
     #                 display_url = self.get_presigned_url(source_url)
     #             else:
     #                 display_url = source_url
-                
+
     #             filename = os.path.basename(source_url.split("?")[0])
 
     #             # Ensure unique sources only
     #             if source_url not in seen_sources:
     #                 reference_links.append(f"- [{filename}]({display_url})")
     #                 seen_sources.add(source_url)  # Avoid duplication
-            
+
     #         formatted_content.append(
     #             f"SOURCE {i} [Score: {score}]:\nContent: {content}\n"
     #         )

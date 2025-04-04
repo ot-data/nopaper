@@ -10,20 +10,24 @@ from litellm import acompletion
 from pydantic import BaseModel
 from starlette.websockets import WebSocketState,WebSocketDisconnect
 
-# Placeholder imports (replace with your actual implementations)
+# Import configuration and utilities
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from config import get_full_config, set_aws_credentials, PORT
 from bedrock_retriever import EnhancedBedrockRetriever
 from function_registry import function_registry
 from memory import ConversationMemory
 from utils import (
-    load_config, set_aws_credentials, 
-    is_memory_query, is_relevant_query, 
+    load_config,
+    is_memory_query, is_relevant_query,
     get_cached_answer, cache_answer
 )
 
 # Load configuration
 try:
     config = load_config()
-    set_aws_credentials(config)
+    set_aws_credentials()
 except Exception as e:
     print(f"Error loading configuration: {e}")
     config = {}
@@ -140,79 +144,79 @@ async def generate_response(query: str, personal_info: Optional[Dict] = None):
     # 1. **Start with a brief introduction** summarizing the topic in 1–2 sentences.
     # 2. **Use bullet points** to structure key details for clarity.
     # 3. **Ensure factual accuracy** by using `{retrieved_content}` as the **primary source** of information.
-    # - If no relevant data is available, phrase responses diplomatically:  
+    # - If no relevant data is available, phrase responses diplomatically:
     # - Example: *"LPU adheres to the highest educational standards and is recognized by several accreditation bodies."*
-  
+
     # 4. **Provide a reference link** from `{retrieved_content}` for students to explore further (if available).
 
     # ---
 
     # ## 🔹 **Query Handling Rules**
-    # 1. **LPU-Specific Responses Only**:  
-    # - Answer only questions related to LPU.  
+    # 1. **LPU-Specific Responses Only**:
+    # - Answer only questions related to LPU.
     # - If asked about another institution or an unrelated topic, politely decline.
-    # 2. **Context-Aware Responses**:  
+    # 2. **Context-Aware Responses**:
     # - Use the **conversation history** to ensure contextually accurate answers.
-    # 3. **Acknowledge Missing Information**:  
+    # 3. **Acknowledge Missing Information**:
     # - If `{retrieved_content}` lacks sufficient data, clearly acknowledge this limitation.
-    # 4. **Readability & Formatting**:  
-    # - Use **structured paragraphs** for better readability.  
+    # 4. **Readability & Formatting**:
+    # - Use **structured paragraphs** for better readability.
     # - Utilize **bullet points** for well-organized details.
-    # 5. **Clarification When Needed**:  
+    # 5. **Clarification When Needed**:
     # - If the question is ambiguous, request **clarification** rather than making assumptions.
-    # 6. **Citation of Sources**:  
+    # 6. **Citation of Sources**:
     # - If directly quoting from `{retrieved_content}`, indicate the **source** of the information.
-    # 7. **Strict Verification**:  
-    # - Before answering, verify that the question is genuinely **about LPU**.  
-    # - If unrelated, respond with:  
+    # 7. **Strict Verification**:
+    # - Before answering, verify that the question is genuinely **about LPU**.
+    # - If unrelated, respond with:
     #     *"I'm configured to only answer questions about Lovely Professional University. Please rephrase your question to focus on LPU-related information."*
 
     # ---
 
     # ## 🔹 **Guardrails & Constraints**
-    # 🚫 **DO NOT generate information beyond `{retrieved_content}`.** Only rely on **verified data**.  
-    # 🚫 **Avoid misleading claims.** Ensure all details are **factual and verifiable**.  
-    # 🚫 **No negative comparisons with other universities.** Instead, highlight LPU’s **unique strengths objectively**.  
-    # 🚫 **If no relevant data is found in `{retrieved_content}`, respond with:**  
+    # 🚫 **DO NOT generate information beyond `{retrieved_content}`.** Only rely on **verified data**.
+    # 🚫 **Avoid misleading claims.** Ensure all details are **factual and verifiable**.
+    # 🚫 **No negative comparisons with other universities.** Instead, highlight LPU’s **unique strengths objectively**.
+    # 🚫 **If no relevant data is found in `{retrieved_content}`, respond with:**
     # *"Currently, we don’t have specific information on this, but LPU remains committed to providing top-quality education and facilities."*
 
     # ---
 
     # ## 🔹 **Example Situations**
     # ### ✅ **Admission Query**
-    # **Question:** "What is the eligibility for B.Tech at LPU?"  
+    # **Question:** "What is the eligibility for B.Tech at LPU?"
     # **Response:** *"LPU requires a minimum of 60% in 12th with Physics, Chemistry, and Mathematics. However, check `{retrieved_content}` for updated requirements."*
 
     # ### ✅ **Scholarships**
-    # **Question:** "What scholarships does LPU offer?"  
+    # **Question:** "What scholarships does LPU offer?"
     # **Response:** *"LPU offers merit-based, sports, and need-based scholarships. Visit `{retrieved_content}` for details."*
 
     # ### ✅ **Placement Stats**
-    # **Question:** "How are placements at LPU?"  
+    # **Question:** "How are placements at LPU?"
     # **Response:** *"LPU has excellent placement records, with `{retrieved_content}` showing major recruiters and salary packages."*
 
     # ### ❌ **Unrelated Query**
-    # **Question:** "How does LPU compare to XYZ University?"  
+    # **Question:** "How does LPU compare to XYZ University?"
     # **Response:** *"I'm configured to only answer questions about LPU. Let me know if you need LPU-related information!"*
 
     # ---
 
 
     # # ## Response Format:
-    # # 🎓 **Career Guidance at LPU**  
+    # # 🎓 **Career Guidance at LPU**
     # # LPU is committed to **helping students achieve career success**.
 
     # # - **Answer the question**: Provide a detailed response.
     # # - **References**: List source URLs as Markdown links (if available).
 
 
-    
+
 
     # Please answer: "{query}"
     # """
 
 
-    
+
 
     #Define the prompt for the AI model
     prompt = f"""
@@ -234,16 +238,16 @@ async def generate_response(query: str, personal_info: Optional[Dict] = None):
     7. Leverage personal info if provided.
     8. Suggest `get_student_info` function if specific data is needed.
 
- 
+
 
     ## Response Format:
-    🎓 **Career Guidance at LPU**  
+    🎓 **Career Guidance at LPU**
     LPU is committed to **helping students achieve career success**.
 
     - **Answer the question**: Provide a detailed response.
     - **References**: List source URLs as Markdown links (if available).
 
-  
+
 
     Please answer: "{query}"
     """
@@ -284,7 +288,7 @@ async def generate_response(query: str, personal_info: Optional[Dict] = None):
 @app.websocket("/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    
+
     while True:
         try:
             # Receive client message
@@ -319,5 +323,5 @@ async def http_chat(request: ChatRequest):
 
 # Run the application
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # Use PORT from config module
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
