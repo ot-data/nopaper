@@ -315,7 +315,7 @@ class EnhancedBedrockRetriever:
         else:
             return source_url
 
-    def get_specific_source_urls(self, response: Dict, indices: List[int] = None) -> str:
+    def get_specific_source_urls(self, response: Dict, indices: List[int] = None, institution_domain: str = None) -> str:
         if "error" in response:
             return ""
 
@@ -324,17 +324,46 @@ class EnhancedBedrockRetriever:
             return ""
 
         formatted_urls = []
+        seen_urls = set()
+
+        # Default to LPU domain if none provided
+        if not institution_domain:
+            institution_domain = "lpu.in"
+
         for i, result in enumerate(results, 1):
             if indices and i not in indices:
                 continue
 
-            location = result.get('location', {})
-            s3_location = location.get('s3Location', {})
-            source_url = s3_location.get('uri', 'Source URL not available')
+            # Get source URL from metadata if available
+            metadata = result.get('metadata', {})
+            source_url = metadata.get('source_url', '')
 
-            if source_url != 'Source URL not available':
-                markdown_link = self.format_as_link(source_url)
-                formatted_urls.append(f"- Source {i}: {markdown_link}")
+            # If not in metadata, try to get from S3 location
+            if not source_url:
+                location = result.get('location', {})
+                s3_location = location.get('s3Location', {})
+                source_url = s3_location.get('uri', '')
+
+            # Only include if it's a valid URL and from the institution's domain
+            if source_url and source_url not in seen_urls:
+                # Strictly verify it's from the institution's domain
+                is_valid = False
+
+                # Check if it's an HTTP/HTTPS URL from the institution's domain
+                if source_url.startswith('http://') or source_url.startswith('https://'):
+                    try:
+                        from urllib.parse import urlparse
+                        parsed_url = urlparse(source_url)
+                        domain = parsed_url.netloc
+                        # Check if the domain is or ends with the institution domain
+                        is_valid = domain == institution_domain or domain.endswith('.' + institution_domain)
+                    except:
+                        is_valid = False
+
+                if is_valid:
+                    seen_urls.add(source_url)
+                    title = metadata.get('title', f"Reference {len(formatted_urls) + 1}")
+                    formatted_urls.append(f"- [{title}]({source_url})")
 
         return "\n".join(formatted_urls)
 

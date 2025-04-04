@@ -1,35 +1,34 @@
-import asyncio
-import websockets
+import requests
 import json
+import time
 
-async def test_query(websocket, query, personal_info, institution_id, session_id):
-    # Send a message
-    message = {
+def test_query(query, personal_info, institution_id, session_id):
+    # Prepare the request
+    url = "http://localhost:8000/chat"
+    data = {
         'query': query,
         'personal_info': personal_info,
         'institution_id': institution_id,
         'session_id': session_id
     }
+    
     print(f"\nSending message with session_id: {session_id}")
-    await websocket.send(json.dumps(message))
-
-    # Receive the response
-    print(f"\n\n===== QUERY: {query} =====")
-
-    # Try to receive responses
-    try:
-        while True:
-            response = await asyncio.wait_for(websocket.recv(), timeout=2.0)
-            response_json = json.loads(response)
-            if response_json.get('type') == 'response':
-                print(response_json.get('content', ''), end='')
-    except asyncio.TimeoutError:
+    
+    # Send the request
+    response = requests.post(url, json=data)
+    
+    # Process the response
+    if response.status_code == 200:
+        print(f"\n\n===== QUERY: {query} =====")
+        responses = response.json().get('responses', [])
+        for resp in responses:
+            if resp.get('type') == 'response':
+                print(resp.get('content', ''), end='')
         print("\n\n[End of response]")
-    except Exception as e:
-        print(f"\nError: {e}")
+    else:
+        print(f"\nError: {response.status_code} - {response.text}")
 
-async def test_websocket():
-    uri = "ws://localhost:8000/chat"
+def main():
     institution_id = "lpu"
     # Use a fixed session ID for consistent memory across requests
     session_id = "test_session_123"
@@ -49,21 +48,20 @@ async def test_websocket():
     queries = [
         # First query - should be remembered
         "Tell me about LPU's Computer Science program",
-
+        
         # Memory query - should return the first question
         "What was my previous question?",
-
+        
         # Another regular query
         "What are the career opportunities after completing B.Tech in Computer Science at LPU?",
-
+        
         # Memory query again - should return the career opportunities question
         "What was my last question?"
     ]
 
-    async with websockets.connect(uri) as websocket:
-        for query in queries:
-            await test_query(websocket, query, personal_info, institution_id, session_id)
-            await asyncio.sleep(1)  # Small delay between queries
+    for query in queries:
+        test_query(query, personal_info, institution_id, session_id)
+        time.sleep(1)  # Small delay between queries
 
 if __name__ == "__main__":
-    asyncio.run(test_websocket())
+    main()

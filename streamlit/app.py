@@ -19,13 +19,15 @@ class WebSocketChatClient:
     def __init__(self, websocket_url):
         self.websocket_url = websocket_url
 
-    async def send_message(self, message, personal_info=None):
+    async def send_message(self, message, personal_info=None, institution_id=None, session_id=None):
         """Asynchronously send a message and yield response chunks from the WebSocket."""
         async with websockets.connect(self.websocket_url) as websocket:
             # Send message
             await websocket.send(json.dumps({
                 'query': message,
-                'personal_info': personal_info or {}
+                'personal_info': personal_info or {},
+                'institution_id': institution_id,
+                'session_id': session_id
             }))
 
             # Collect streamed responses
@@ -37,7 +39,7 @@ class WebSocketChatClient:
                     yield f"Error: {data['content']}"
                     break
 
-    def stream_response(self, message, personal_info=None):
+    def stream_response(self, message, personal_info=None, institution_id=None, session_id=None):
         """Run the async send_message in a separate thread and yield chunks synchronously."""
         q = queue.Queue()
 
@@ -49,7 +51,7 @@ class WebSocketChatClient:
             async def put_chunks():
                 """Put WebSocket response chunks into the queue."""
                 try:
-                    async for chunk in self.send_message(message, personal_info):
+                    async for chunk in self.send_message(message, personal_info, institution_id, session_id):
                         q.put(chunk)
                 except Exception as e:
                     q.put(f"Connection error: {str(e)}")
@@ -90,8 +92,14 @@ def main():
     # Use WebSocket URL from config
     chat_client = WebSocketChatClient(WEBSOCKET_URL)
 
-    # Title
-    st.title("🎓 LPU Knowledge Assistant")
+    # Title with institution selection
+    institution_options = ["Lovely Professional University (LPU)", "Amity University"]
+    institution_ids = {"Lovely Professional University (LPU)": "lpu", "Amity University": "amity"}
+
+    selected_institution = st.selectbox("Select Institution", institution_options)
+    institution_id = institution_ids[selected_institution]
+
+    st.title(f"🎓 {selected_institution} Knowledge Assistant")
 
     # Sidebar for Personal Information
     with st.sidebar:
@@ -106,9 +114,13 @@ def main():
         if program:
             personal_info['program'] = program
 
-    # Initialize chat history
+    # Initialize chat history and session ID
     if "messages" not in st.session_state:
         st.session_state.messages = []
+
+    # Create a consistent session ID for this Streamlit session
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = f"streamlit_{id(st.session_state)}"
 
     # Display chat messages
     for message in st.session_state.messages:
@@ -117,8 +129,10 @@ def main():
 
     # User input form
     with st.form("chat_form", clear_on_submit=True):
-        user_query = st.text_input("Your Question", placeholder="Ask about LPU...", key="input")
-        submit_button = st.form_submit_button("Send")
+        user_query = st.text_input("Your Question", placeholder=f"Ask about {selected_institution}...", key="input")
+        col1, col2 = st.columns(2)
+        submit_button = col1.form_submit_button("Send")
+        memory_test_button = col2.form_submit_button("Test Memory")
 
     # Handle user submission
     if submit_button and user_query:
@@ -136,7 +150,11 @@ def main():
 
             # Stream the response from WebSocket
             try:
-                for chunk in chat_client.stream_response(user_query, personal_info):
+                # Use the consistent session ID
+                session_id = st.session_state.session_id
+                st.sidebar.info(f"Using session ID: {session_id}")
+
+                for chunk in chat_client.stream_response(user_query, personal_info, institution_id, session_id):
                     full_response += chunk
                     response_placeholder.markdown(full_response + "▌")
 
@@ -144,6 +162,41 @@ def main():
 
                 # Add to memory and session state
                 memory.add_interaction(user_query, full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+            except Exception as e:
+                error_msg = f"Connection error: {str(e)}"
+                response_placeholder.markdown(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+
+    # Handle memory test button
+    if memory_test_button:
+        # Add memory test message to chat history
+        memory_query = "What was my previous question?"
+        st.session_state.messages.append({"role": "user", "content": memory_query})
+
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(memory_query)
+
+        # Display assistant response
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+
+            # Stream the response from WebSocket
+            try:
+                # Use the consistent session ID
+                session_id = st.session_state.session_id
+
+                for chunk in chat_client.stream_response(memory_query, personal_info, institution_id, session_id):
+                    full_response += chunk
+                    response_placeholder.markdown(full_response + "▌")
+
+                response_placeholder.markdown(full_response)
+
+                # Add to memory and session state
+                memory.add_interaction(memory_query, full_response)
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
 
             except Exception as e:
