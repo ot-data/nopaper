@@ -73,7 +73,6 @@ class FunctionRegistry:
         func = self.functions[function_name]["function"]
         return func(**arguments)
 
-# Function Registry Global Instance
 function_registry = FunctionRegistry()
 
 @function_registry.register

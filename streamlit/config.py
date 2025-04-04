@@ -1,19 +1,17 @@
 """
 Centralized configuration module that loads all environment variables directly.
-This replaces the previous YAML-based configuration approach.
 """
 import os
 from dotenv import load_dotenv
 from typing import Dict, Any, Optional
 
-# Load environment variables from .env file if it exists
 load_dotenv()
 
 # AWS Configuration
 AWS_REGION = os.getenv("AWS_REGION")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION_NAME = os.getenv("AWS_REGION", AWS_REGION)  # Fallback to AWS_REGION if AWS_REGION_NAME not set
+AWS_REGION_NAME = os.getenv("AWS_REGION", AWS_REGION)  
 
 # Bedrock Configuration
 BEDROCK_MODEL_NAME = os.getenv("BEDROCK_MODEL_NAME")

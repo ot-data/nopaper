@@ -7,7 +7,6 @@ from pathlib import Path
 class InstitutionManager:
     def __init__(self, config_path: str = None):
         if config_path is None:
-            # Get the absolute path to the institutions_config.yaml file
             script_dir = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(script_dir, "institutions_config.yaml")
 
@@ -44,7 +43,6 @@ class InstitutionManager:
         institution = self.get_institution_config(institution_id)
         template = self.get_prompt_template(institution_id)
 
-        # Create a dictionary of all placeholders and their values
         placeholders = {
             "{{INSTITUTION_NAME}}": institution["name"],
             "{{INSTITUTION_SHORT_NAME}}": institution["short_name"],
@@ -54,7 +52,6 @@ class InstitutionManager:
             "{{PROGRAMS_URL}}": institution["programs_url"]
         }
 
-        # Replace all placeholders in the template
         processed_template = template
         for placeholder, value in placeholders.items():
             processed_template = processed_template.replace(placeholder, value)

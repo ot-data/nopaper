@@ -7,7 +7,6 @@ class SimpleRetriever:
         self.config = config
 
     def retrieve(self, query: str, advanced: bool = True) -> Dict:
-        # Simplified retriever that returns sample results
         return {
             "retrievalResults": [
                 {
@@ -29,7 +28,6 @@ class SimpleRetriever:
         }
 
     def format_retrieval_results(self, response: Dict) -> Tuple[str, str]:
-        # Format the retrieval results
         if "retrievalResults" not in response or not response["retrievalResults"]:
             return "No content available.", ""
 
@@ -73,7 +71,6 @@ class SimpleRetriever:
 
     def _generate_title_from_content(self, content: str, index: int) -> str:
         """Generate a descriptive title from content"""
-        # Extract keywords from content
         if "admission" in content.lower():
             return "LPU Admission Information"
         elif "engineering" in content.lower():

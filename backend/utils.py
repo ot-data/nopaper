@@ -85,58 +85,7 @@ def is_relevant_query(query: str, config: Optional[Dict] = None) -> bool:
 
     return False
 
-# def is_relevant_query(query: str, config: Optional[Dict] = None) -> bool:
-#     processed_query = preprocess_query(query).lower()
 
-#     lpu_terms = [
-#         "lpu", "lovely professional university", "lovely professional",
-#         "lpu university", "lovely university", "phagwara campus"
-#     ]
-#     education_topics = [
-#         "fees", "fee structure", "tuition", "payment", "cost", "installment", "scholarship",
-#         "financial aid", "education loan", "hidden charges", "extra fees", "refund", "discount",
-#         "admission", "enrollment", "application", "eligibility", "entrance exam", "criteria",
-#         "cutoff", "selection process", "admission test", "apply", "registration", "interview",
-#         "course", "program", "degree", "curriculum", "syllabus", "branch", "specialization",
-#         "btech", "mtech", "phd", "master", "bachelor", "undergraduate", "postgraduate", "diploma",
-#         "computer science", "mechanical", "civil", "electrical", "ece", "eee", "biotechnology",
-#         "semester", "credit", "research", "faculty", "professor", "lecturer", "teaching",
-#         "hostel", "accommodation", "mess", "food", "canteen", "library", "lab", "laboratory",
-#         "wi-fi", "internet", "facility", "gym", "sports", "auditorium", "classroom", "infrastructure",
-#         "placement", "internship", "job", "career", "salary", "package", "recruitment",
-#         "company", "corporate", "industry", "employment", "training", "skill development",
-#         "campus", "university", "college", "institute", "department", "school", "center of excellence",
-#         "ranking", "rating", "review", "reputation", "accreditation", "naac", "ugc", "aicte", "parking",
-#         "film and tv production", "cafeteria", "documents", "job opportunities", "international job opportunities",
-#         "curfew", "rules", "regulation", "visit", "compulsory", "mandatory", "first year", "students",
-#         "global", "abroad", "international", "exchange", "study abroad"
-#     ]
-
-#     # Explicitly LPU-related
-#     if any(term in processed_query for term in lpu_terms):
-#         return True
-
-#     # Education-related topics
-#     if any(term in processed_query for term in education_topics):
-#         return True
-
-#     education_phrases = [
-#         "how to apply", "when can i apply", "what courses", "which branch",
-#         "how much is the", "what is the fee", "is there a hostel", "tell me about",
-#         "what about", "how many students", "what is the cutoff", "what are the requirements",
-#         "how long is the", "do you offer", "can i get", "is there any", "are there any",
-#         "do i need to", "is it compulsory"
-#     ]
-
-#     if any(phrase in processed_query for phrase in education_phrases):
-#         return True
-
-#     question_indicators = ["what", "how", "where", "when", "why", "is", "are", "can", "do", "tell me"]
-#     if any(indicator in processed_query.split() for indicator in question_indicators):
-#         if any(term in processed_query for term in ["study", "student", "learn", "education", "academic", "job", "career"]):
-#             return True
-
-#     return False
 
 def get_cached_answer(question: str, cache: Dict, config: Dict) -> Optional[str]:
     if not config["cache"]["enabled"]:

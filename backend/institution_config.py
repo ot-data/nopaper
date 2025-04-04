@@ -1,6 +1,5 @@
 """
 Centralized configuration module for institution-specific settings.
-This replaces the previous YAML-based configuration approach.
 """
 import os
 from typing import Dict, Any, Optional

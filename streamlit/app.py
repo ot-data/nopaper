@@ -5,8 +5,6 @@ import asyncio
 import json
 import queue
 import threading
-
-# Import configuration and utilities
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -56,7 +54,7 @@ class WebSocketChatClient:
                 except Exception as e:
                     q.put(f"Connection error: {str(e)}")
                 finally:
-                    q.put(None)  # Sentinel to indicate the end
+                    q.put(None)  
 
             loop.run_until_complete(put_chunks())
             loop.close()
