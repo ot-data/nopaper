@@ -52,10 +52,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  
-    allow_headers=["*"],  
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 def get_personal_info_context(personal_info: Optional[Dict] = None) -> str:
@@ -138,10 +138,20 @@ async def generate_response(query: str, personal_info: Optional[Dict] = None, in
             institution_domain = "lpu.in"  # Default fallback
 
     # Retrieve context from knowledge base
+    print(f"\n=== Retrieving content for query: '{query}' ===\n")
     retrieval_response = retriever.retrieve(query, advanced=True)
-    retrieved_content, _ = retriever.format_retrieval_results(retrieval_response)
-    print(f"retrieved_content {retrieved_content}")
-    references_raw = retriever.get_specific_source_urls(retrieval_response, institution_domain=institution_domain)
+
+    # Format the retrieval results
+    print(f"\n=== Formatting retrieval results ===\n")
+    retrieved_content, reference_links = retriever.format_retrieval_results(retrieval_response)
+    print(f"Retrieved content: {retrieved_content}")
+    print(f"Reference links from format_retrieval_results: {reference_links}")
+
+    # Get specific source URLs for the institution
+    institution_website = institution_config.get("website", "") if institution_config else ""
+    print(f"\n=== Getting specific source URLs for domain: {institution_domain}, website: {institution_website} ===\n")
+    references_raw = retriever.get_specific_source_urls(retrieval_response, institution_domain=institution_domain, institution_website=institution_website)
+    print(f"References raw: {references_raw}")
 
     # Build context for the prompt
     context = memory.get_context()
@@ -163,6 +173,14 @@ async def generate_response(query: str, personal_info: Optional[Dict] = None, in
 
     # Institution-specific Template
     {dynamic_template}
+
+    # IMPORTANT INSTRUCTIONS FOR REFERENCES - READ CAREFULLY
+    - DO NOT create or generate any reference links in your response
+    - DO NOT include any URLs or hyperlinks in your response text
+    - DO NOT add a References section in your response
+    - The system will automatically add a "Knowledge Base References" section at the end with verified links
+    - If you want to refer to information, use natural language like "According to LPU's website" without adding links
+    - Any references you create will be removed and only knowledge base references will be shown
 
     Please answer: "{query}"
     """
@@ -189,7 +207,15 @@ async def generate_response(query: str, personal_info: Optional[Dict] = None, in
 
         # Add references if available
         if references_raw:
-            yield {"type": "response", "content": f"\n\n---\n**References:**\n{references_raw}"}
+            yield {"type": "response", "content": f"\n\n---\n**Knowledge Base References:**\n{references_raw}"}
+        else:
+            # If no specific references were found, add a fallback reference to the institution's main website
+            if institution_config and "website" in institution_config:
+                institution_name = institution_config.get("name", "Institution")
+                website = institution_config.get("website", "")
+                print(f"No specific references found. Adding fallback reference to {website}")
+                fallback_reference = f"- [{institution_name} Official Website]({website})"
+                yield {"type": "response", "content": f"\n\n---\n** References:**\n{fallback_reference}"}
 
         # Cache and store the response
         cache_answer(query, full_answer, cache, config)

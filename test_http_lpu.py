@@ -47,16 +47,17 @@ def main():
     # Test queries
     queries = [
         # First query - should be remembered
-        "Tell me about LPU's Computer Science program",
+        "How can I complete the admission process?",
+        # "Tell me about LPU's Computer Science program",
         
-        # Memory query - should return the first question
-        "What was my previous question?",
+        # # Memory query - should return the first question
+        # "What was my previous question?",
         
-        # Another regular query
-        "What are the career opportunities after completing B.Tech in Computer Science at LPU?",
+        # # Another regular query
+        # "What are the career opportunities after completing B.Tech in Computer Science at LPU?",
         
-        # Memory query again - should return the career opportunities question
-        "What was my last question?"
+        # # Memory query again - should return the career opportunities question
+        # "What was my last question?"
     ]
 
     for query in queries:
