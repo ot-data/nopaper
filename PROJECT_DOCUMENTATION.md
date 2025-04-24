@@ -30,8 +30,7 @@ The backend server is built using FastAPI and provides WebSocket endpoints for r
 @app.websocket("/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    # Generate a unique session ID for this WebSocket connection
-    session_id = str(id(websocket))
+    print(f"DEBUG - New WebSocket connection established")
 
     while True:
         try:
@@ -40,17 +39,34 @@ async def websocket_endpoint(websocket: WebSocket):
             query = data.get('query')
             personal_info = data.get('personal_info')
             institution_id = data.get('institution_id')
+            message_id = data.get('message_id')  # Get message_id from client
 
-            # Use client-provided session ID if available
-            client_session_id = data.get('session_id')
-            effective_session_id = client_session_id if client_session_id else session_id
+            # Use client-provided session ID if available, otherwise generate a UUID
+            session_id = data.get('session_id')
+            if not session_id:
+                # Generate a new UUID for this session
+                session_id = f"ws_{uuid.uuid4()}"
+                logger.info(f"Client did not provide session ID, generated new one: {session_id}")
+            else:
+                logger.debug(f"Using client-provided session ID: {session_id}")
 
-            # Stream the response with the session ID
-            async for response in generate_response(query, personal_info, institution_id, effective_session_id):
-                await websocket.send_json(response)
+            # Get the response with the session ID
+            response = await generate_response(query, personal_info, institution_id, session_id)
+
+            # Handle different response types and send with message_id and session_id
+            if isinstance(response, dict) and "responses" in response:
+                # If it's a special query response with multiple chunks
+                for i, chunk in enumerate(response["responses"]):
+                    # Add message_id and session_id to each chunk
+                    chunk_with_id = {**chunk, "message_id": message_id, "session_id": session_id}
+                    # Mark the last chunk
+                    if i == len(response["responses"]) - 1:
+                        chunk_with_id["is_last"] = True
+                    await websocket.send_json(chunk_with_id)
+            # Additional response handling for other types...
 
         except WebSocketDisconnect:
-            print("WebSocket disconnected")
+            logger.info("WebSocket disconnected")
             break
 ```
 
@@ -72,15 +88,91 @@ async def http_chat(request: ChatRequest):
 
 ### Conversation Memory
 
-The system maintains conversation history using a `ConversationMemory` class:
+The system uses an abstract base class for conversation memory with multiple implementations:
 
 ```python
-class ConversationMemory:
+# Base abstract class for conversation memory
+class BaseConversationMemory(ABC):
+    """Abstract base class for conversation memory implementations."""
+
+    @abstractmethod
+    def add_interaction(self, question: str, answer: str) -> None:
+        """Add a new interaction to the conversation history."""
+        pass
+
+    @abstractmethod
+    def get_context(self) -> str:
+        """Get the conversation context as a formatted string."""
+        pass
+
+    @abstractmethod
+    def get_previous_question(self) -> Optional[str]:
+        """Get the most recent question from the conversation history."""
+        pass
+
+    @abstractmethod
+    def clear(self) -> None:
+        """Clear the conversation history."""
+        pass
+```
+
+#### Redis-backed Implementation
+
+The primary implementation uses Redis for persistent storage:
+
+```python
+class RedisConversationMemory(BaseConversationMemory):
+    """Redis-backed implementation of conversation memory."""
+
+    def __init__(self, session_id: str, redis_client: Any, max_history: int = 5, ttl: int = 86400):
+        self.session_id = session_id
+        self.redis = redis_client
+        self.max_history = max_history
+        self.ttl = ttl  # Time-to-live in seconds (default: 1 day)
+        self.key_prefix = "conversation:"
+        # For compatibility with code that expects it
+        self.conversation_history = []
+
+    def add_interaction(self, question: str, answer: str) -> None:
+        key = f"{self.key_prefix}{self.session_id}"
+
+        try:
+            # Get current history from Redis
+            history = self._get_history()
+
+            # Add new interaction
+            history.append({
+                "question": question,
+                "answer": answer,
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # Trim if needed
+            if len(history) > self.max_history:
+                history = history[-self.max_history:]
+
+            # Save back to Redis with TTL
+            self.redis.set(key, json.dumps(history))
+            self.redis.expire(key, self.ttl)
+
+        except Exception as e:
+            # Fallback to in-memory if Redis fails
+            logger.error(f"Error adding interaction to Redis: {e}")
+```
+
+#### In-memory Fallback
+
+A fallback implementation uses in-memory storage:
+
+```python
+class InMemoryConversationMemory(BaseConversationMemory):
+    """In-memory implementation of conversation memory."""
+
     def __init__(self, max_history: int = 5):
         self.max_history = max_history
         self.conversation_history: List[Dict] = []
 
-    def add_interaction(self, question: str, answer: str):
+    def add_interaction(self, question: str, answer: str) -> None:
         timestamp = datetime.now()
         self.conversation_history.append({
             "question": question,
@@ -89,23 +181,29 @@ class ConversationMemory:
         })
         if len(self.conversation_history) > self.max_history:
             self.conversation_history.pop(0)
-
-    def get_previous_question(self) -> Optional[str]:
-        if self.conversation_history:
-            return self.conversation_history[-1]["question"]
-        return None
 ```
 
-Memory is stored in a dictionary keyed by session ID:
+The system tries to use Redis first and falls back to in-memory storage if Redis is not available:
 
 ```python
-# Dictionary to store conversation memory for different sessions
-memory_store: Dict[str, ConversationMemory] = {}
-
 # Get or create memory for a session
-def get_memory(session_id: str) -> ConversationMemory:
+def get_memory(session_id: str) -> BaseConversationMemory:
+    # Use Redis for persistent storage if enabled and available
+    if settings.redis.enabled and redis_client is not None:
+        try:
+            return RedisConversationMemory(
+                session_id=session_id,
+                redis_client=redis_client,
+                max_history=settings.memory.max_history,
+                ttl=settings.memory.session_ttl
+            )
+        except Exception as e:
+            logger.error(f"Error creating Redis memory: {e}")
+            logger.warning("Falling back to in-memory storage.")
+
+    # Fall back to in-memory storage
     if session_id not in memory_store:
-        memory_store[session_id] = ConversationMemory(max_history=5)
+        memory_store[session_id] = InMemoryConversationMemory(max_history=settings.memory.max_history)
     return memory_store[session_id]
 ```
 
@@ -127,42 +225,104 @@ def is_memory_query(query: str) -> bool:
 
 ### WebSocket Client
 
-The Streamlit app uses a WebSocket client to communicate with the backend:
+The Streamlit app uses a persistent WebSocket client to communicate with the backend:
 
 ```python
 class WebSocketChatClient:
     def __init__(self, websocket_url):
         self.websocket_url = websocket_url
+        self.connection = None
+        self.connected = False
+        self.connection_lock = threading.Lock()
+        self.event_loop = None
+        self.event_loop_thread = None
+        self.message_queue = queue.Queue()
+        self.response_queues = {}
+        self.next_message_id = 0
+        self.shutdown_event = threading.Event()
 
-    async def send_message(self, message, personal_info=None, institution_id=None, session_id=None):
-        """Asynchronously send a message and yield response chunks from the WebSocket."""
-        async with websockets.connect(self.websocket_url) as websocket:
-            # Send message with session ID
-            await websocket.send(json.dumps({
-                'query': message,
-                'personal_info': personal_info or {},
-                'institution_id': institution_id,
-                'session_id': session_id
-            }))
+    def initialize(self):
+        """Initialize the WebSocket connection in a background thread."""
+        if self.event_loop_thread is None:
+            self.event_loop = asyncio.new_event_loop()
+            self.event_loop_thread = threading.Thread(target=self._run_event_loop, daemon=True)
+            self.event_loop_thread.start()
 
-            # Collect streamed responses
-            async for message in websocket:
-                data = json.loads(message)
-                if data['type'] == 'response':
-                    yield data['content']
-                elif data['type'] == 'error':
-                    yield f"Error: {data['content']}"
-                    break
+    def _run_event_loop(self):
+        """Run the asyncio event loop in a background thread."""
+        asyncio.set_event_loop(self.event_loop)
+        self.event_loop.run_until_complete(self._maintain_connection())
+
+    async def _maintain_connection(self):
+        """Maintain the WebSocket connection and process messages."""
+        while not self.shutdown_event.is_set():
+            try:
+                if not self.connected:
+                    await self._connect()
+
+                # Process any pending messages
+                while not self.message_queue.empty():
+                    message_id, message, personal_info, institution_id, session_id = self.message_queue.get()
+                    await self._send_message_internal(message_id, message, personal_info, institution_id, session_id)
+
+                # Small delay to prevent CPU spinning
+                await asyncio.sleep(0.01)
+            except Exception as e:
+                print(f"Connection maintenance error: {str(e)}")
+                self.connected = False
+                await asyncio.sleep(1)  # Wait before reconnecting
+
+    def send_message(self, message, personal_info=None, institution_id=None, session_id=None):
+        """Queue a message to be sent and return a message ID."""
+        with self.connection_lock:
+            message_id = self.next_message_id
+            self.next_message_id += 1
+
+            # Create a queue for this message's responses
+            self.response_queues[message_id] = queue.Queue()
+
+            # Queue the message to be sent
+            self.message_queue.put((message_id, message, personal_info, institution_id, session_id))
+
+            return message_id
+
+    def stream_response(self, message, personal_info=None, institution_id=None, session_id=None):
+        """Send a message and yield response chunks synchronously."""
+        # Ensure the client is initialized
+        self.initialize()
+
+        # Send the message and get a message ID
+        message_id = self.send_message(message, personal_info, institution_id, session_id)
+
+        # Yield responses from the queue
+        while True:
+            response = self.response_queues[message_id].get()
+            if response is None:  # End of stream
+                break
+
+            if response.get('type') == 'response':
+                yield response.get('content', '')
+            elif response.get('type') == 'error':
+                yield f"Error: {response.get('content', 'Unknown error')}"
+                break
+
+        # Clean up the response queue
+        del self.response_queues[message_id]
 ```
+
+This implementation maintains a single, persistent WebSocket connection per user session, improving efficiency by avoiding the overhead of creating a new connection for each message.
 
 ### Session Management
 
-The Streamlit app maintains a consistent session ID for each user session:
+The Streamlit app maintains a consistent session ID for each user session using UUID generation:
 
 ```python
 # Create a consistent session ID for this Streamlit session
 if "session_id" not in st.session_state:
-    st.session_state.session_id = f"streamlit_{id(st.session_state)}"
+    # Generate a UUID for the initial session ID
+    import uuid
+    st.session_state.session_id = f"streamlit_{uuid.uuid4()}"
+    print(f"Generated new client session ID: {st.session_state.session_id}")
 ```
 
 This session ID is passed with each WebSocket message to ensure conversation memory works correctly:
@@ -175,6 +335,19 @@ st.sidebar.info(f"Using session ID: {session_id}")
 for chunk in chat_client.stream_response(user_query, personal_info, institution_id, session_id):
     full_response += chunk
     response_placeholder.markdown(full_response + "▌")
+```
+
+The backend prioritizes client-provided session IDs and only generates UUIDs as a fallback:
+
+```python
+# Use client-provided session ID if available, otherwise generate a UUID
+session_id = data.get('session_id')
+if not session_id:
+    # Generate a new UUID for this session
+    session_id = f"ws_{uuid.uuid4()}"
+    logger.info(f"Client did not provide session ID, generated new one: {session_id}")
+else:
+    logger.debug(f"Using client-provided session ID: {session_id}")
 ```
 
 ### Memory Testing
@@ -227,33 +400,69 @@ if memory_test_button:
 
 ## Configuration
 
-### Environment Variables
+### Configuration with Pydantic BaseSettings
 
-The system uses environment variables for configuration:
+The system uses Pydantic's BaseSettings for type-safe configuration management:
 
 ```python
-# AWS Configuration
-AWS_REGION = os.getenv("AWS_REGION")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+class AWSSettings(BaseSettings):
+    """AWS-related configuration settings."""
+    region: str = Field(
+        default=os.getenv("AWS_REGION"),
+        description="AWS region",
+        json_schema_extra={"env": "AWS_REGION"}
+    )
+    access_key_id: str = Field(
+        default=os.getenv("AWS_ACCESS_KEY_ID"),
+        description="AWS access key ID",
+        json_schema_extra={"env": "AWS_ACCESS_KEY_ID"}
+    )
+    secret_access_key: str = Field(
+        default=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        description="AWS secret access key",
+        json_schema_extra={"env": "AWS_SECRET_ACCESS_KEY"}
+    )
 
-# Bedrock Configuration
-BEDROCK_MODEL_NAME = os.getenv("BEDROCK_MODEL_NAME")
-BEDROCK_MODEL_ARN = os.getenv("BEDROCK_MODEL_ARN")
+    model_config = ConfigDict(env_file=".env", extra="ignore")
 
-# Knowledge Base Configuration
-KB_ID = os.getenv("KB_ID")
+class RedisSettings(BaseSettings):
+    """Redis configuration settings."""
+    enabled: bool = Field(
+        default=os.getenv("REDIS_ENABLED", "false").lower() == "true",
+        description="Whether Redis is enabled",
+        json_schema_extra={"env": "REDIS_ENABLED"}
+    )
+    host: str = Field(
+        default=os.getenv("REDIS_HOST", "localhost"),
+        description="Redis host",
+        json_schema_extra={"env": "REDIS_HOST"}
+    )
+    # ... other Redis settings
 
-# Institution-specific Knowledge Base IDs
-LPU_KB_ID = os.getenv("LPU_KB_ID", KB_ID)
-AMITY_KB_ID = os.getenv("AMITY_KB_ID")
+class Settings(BaseSettings):
+    """Main settings class that combines all configuration settings."""
+    aws: AWSSettings = Field(default_factory=AWSSettings)
+    bedrock: BedrockSettings = Field(default_factory=BedrockSettings)
+    knowledge_base: KnowledgeBaseSettings = Field(default_factory=KnowledgeBaseSettings)
+    retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
+    cache: CacheSettings = Field(default_factory=CacheSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
+    websocket: WebSocketSettings = Field(default_factory=WebSocketSettings)
+    server: ServerSettings = Field(default_factory=ServerSettings)
 
-# WebSocket Configuration
-WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/chat")
+    model_config = ConfigDict(env_file=".env", extra="ignore")
 
-# Server Configuration
-PORT = int(os.getenv("PORT", "8000"))
+# Create a global settings instance
+settings = Settings()
 ```
+
+This approach provides several advantages:
+1. Type safety and validation
+2. Default values
+3. Documentation through field descriptions
+4. Automatic loading from environment variables and .env files
+5. Nested configuration structure
 
 ## Testing
 
@@ -377,7 +586,7 @@ python test_memory_client.py  # In another terminal
 
 1. **Session ID Consistency**: For memory functionality to work correctly, a consistent session ID must be used across all messages from the same user session.
 
-2. **WebSocket Connection Management**: The Streamlit app creates a new WebSocket connection for each message, so the session ID must be passed explicitly to maintain conversation context.
+2. **WebSocket Connection Management**: The Streamlit app maintains a persistent WebSocket connection for each user session, improving efficiency while still passing the session ID explicitly to maintain conversation context.
 
 3. **Memory Query Detection**: The system uses pattern matching to detect memory-related queries, which allows it to respond appropriately to questions about previous interactions.
 
@@ -413,9 +622,10 @@ If response streaming is not working:
 
 ## Future Improvements
 
-1. **Persistent Memory**: Implement database storage for conversation memory to persist across server restarts.
+1. **IAM Role Integration**: Replace hardcoded AWS credentials with IAM roles for improved security.
 2. **User Authentication**: Add user authentication to associate conversation memory with specific users.
 3. **Enhanced Memory Queries**: Improve memory query detection to handle more complex questions about previous interactions.
 4. **Multi-Session Support**: Allow users to manage multiple conversation sessions.
-5. **Performance Optimization**: Optimize WebSocket connections and response streaming for better performance.
+5. **Performance Optimization**: Further optimize WebSocket connections and response streaming for better performance.
+6. **Improved Test Coverage**: Increase test coverage, especially for frontend components.
 

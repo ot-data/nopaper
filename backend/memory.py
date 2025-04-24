@@ -1,12 +1,44 @@
 from datetime import datetime
-from typing import List, Dict, Optional
+import json
+import logging
+from typing import List, Dict, Optional, Protocol, Union, Any
+from abc import ABC, abstractmethod
 
-class ConversationMemory:
+logger = logging.getLogger(__name__)
+
+# Base abstract class for conversation memory
+class BaseConversationMemory(ABC):
+    """Abstract base class for conversation memory implementations."""
+
+    @abstractmethod
+    def add_interaction(self, question: str, answer: str) -> None:
+        """Add a new interaction to the conversation history."""
+        pass
+
+    @abstractmethod
+    def get_context(self) -> str:
+        """Get the conversation context as a formatted string."""
+        pass
+
+    @abstractmethod
+    def get_previous_question(self) -> Optional[str]:
+        """Get the most recent question from the conversation history."""
+        pass
+
+    @abstractmethod
+    def clear(self) -> None:
+        """Clear the conversation history."""
+        pass
+
+# In-memory implementation
+class InMemoryConversationMemory(BaseConversationMemory):
+    """In-memory implementation of conversation memory."""
+
     def __init__(self, max_history: int = 5):
         self.max_history = max_history
         self.conversation_history: List[Dict] = []
 
-    def add_interaction(self, question: str, answer: str):
+    def add_interaction(self, question: str, answer: str) -> None:
         timestamp = datetime.now()
         self.conversation_history.append({
             "question": question,
@@ -29,5 +61,8 @@ class ConversationMemory:
             return self.conversation_history[-1]["question"]
         return None
 
-    def clear(self):
+    def clear(self) -> None:
         self.conversation_history = []
+
+# For backward compatibility
+ConversationMemory = InMemoryConversationMemory

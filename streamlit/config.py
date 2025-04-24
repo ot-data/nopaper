@@ -1,69 +1,55 @@
 """
-Centralized configuration module that loads all environment variables directly.
+Streamlit configuration module that imports from the backend configuration.
+This avoids duplication and ensures consistency between backend and frontend.
 """
 import os
-from dotenv import load_dotenv
+import sys
 from typing import Dict, Any, Optional
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
-load_dotenv()
+# Add the backend directory to the path so we can import from it
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from backend.config import (
+    settings,
+    get_aws_config,
+    # get_agent_config removed as it's no longer used
+    set_aws_credentials,
+    AWS_REGION,
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_REGION_NAME,
+    BEDROCK_MODEL_NAME,
+    BEDROCK_MODEL_ARN,
+    KB_ID,
+    WEBSOCKET_URL
+)
 
-# AWS Configuration
-AWS_REGION = os.getenv("AWS_REGION")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION_NAME = os.getenv("AWS_REGION", AWS_REGION)  
+# Override the port for Streamlit (different from backend)
+class StreamlitServerSettings(BaseSettings):
+    """Streamlit-specific server settings."""
+    port: int = Field(default=int(os.getenv("STREAMLIT_PORT", "8501")), env="STREAMLIT_PORT", description="Streamlit server port")
 
-# Bedrock Configuration
-BEDROCK_MODEL_NAME = os.getenv("BEDROCK_MODEL_NAME")
-BEDROCK_MODEL_ARN = os.getenv("BEDROCK_MODEL_ARN")
-
-# Knowledge Base Configuration
-KB_ID = os.getenv("KB_ID")
-
-# Agent Configuration
-AGENT_ID = os.getenv("AGENT_ID")
-ALIAS_ID = os.getenv("ALIAS_ID")
-
-# WebSocket Configuration
-WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000/chat")
-
-# Server Configuration
-PORT = int(os.getenv("PORT", "8501"))  # Default Streamlit port
-
-def get_aws_config() -> Dict[str, Any]:
-    """Get AWS configuration as a dictionary."""
-    return {
-        "region": AWS_REGION,
-        "bedrock_model": BEDROCK_MODEL_NAME,
-        "s3_kb_id": KB_ID,
-        "access_key": AWS_ACCESS_KEY_ID,
-        "secret_key": AWS_SECRET_ACCESS_KEY,
-        "model_arn": BEDROCK_MODEL_ARN,
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore"
     }
 
-def get_agent_config() -> Dict[str, Any]:
-    """Get agent configuration as a dictionary."""
-    return {
-        "agent_id": AGENT_ID,
-        "alias_id": ALIAS_ID,
-    }
+# Create a Streamlit-specific settings instance
+streamlit_settings = StreamlitServerSettings()
+
+# Override PORT for Streamlit
+PORT = streamlit_settings.port
 
 def get_full_config() -> Dict[str, Any]:
-    """Get the full configuration as a dictionary, similar to the previous YAML structure."""
+    """Get the full configuration as a dictionary."""
     return {
         "aws": get_aws_config(),
-        "agent": get_agent_config(),
+        # agent config removed as it's no longer used
         "websocket": {
             "url": WEBSOCKET_URL,
         },
+        "server": {
+            "port": PORT
+        }
     }
-
-def set_aws_credentials():
-    """Set AWS credentials in environment variables."""
-    # Only set if not already set
-    if not os.environ.get("AWS_ACCESS_KEY_ID"):
-        os.environ["AWS_ACCESS_KEY_ID"] = AWS_ACCESS_KEY_ID
-    if not os.environ.get("AWS_SECRET_ACCESS_KEY"):
-        os.environ["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
-    if not os.environ.get("AWS_REGION_NAME"):
-        os.environ["AWS_REGION_NAME"] = AWS_REGION_NAME

@@ -1,26 +1,19 @@
 from typing import Dict, Optional, Any
-import yaml
-import re
 import os
-from pathlib import Path
+import logging
+from institution_settings import institution_settings
+
+logger = logging.getLogger(__name__)
 
 class InstitutionManager:
-    def __init__(self, config_path: str = None):
-        if config_path is None:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(script_dir, "institutions_config.yaml")
+    def __init__(self):
+        """Initialize the institution manager using Pydantic settings."""
+        self.institutions = institution_settings.institutions
+        self.prompt_templates = institution_settings.prompt_templates
+        self.default_institution_id = institution_settings.default_institution_id
 
-        self.config = self._load_config(config_path)
-        self.institutions = self.config["institutions"]
-        self.prompt_templates = self.config["prompt_templates"]
-        self.default_institution_id = os.getenv("DEFAULT_INSTITUTION_ID", "lpu")
-
-    def _load_config(self, config_path: str) -> Dict:
-        try:
-            with open(config_path, 'r') as f:
-                return yaml.safe_load(f)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Could not find institutions_config.yaml at {config_path}. Current working directory: {os.getcwd()}")
+        logger.info(f"Initialized InstitutionManager with default institution: {self.default_institution_id}")
+        logger.info(f"Available institutions: {list(self.institutions.keys())}")
 
     def get_institution_config(self, institution_id: Optional[str] = None) -> Dict:
         """Get institution configuration, falling back to default if not specified."""
@@ -35,8 +28,8 @@ class InstitutionManager:
     def get_prompt_template(self, institution_id: Optional[str] = None) -> str:
         """Get the raw prompt template for an institution."""
         institution = self.get_institution_config(institution_id)
-        template_name = institution["prompt_template"]
-        return self.prompt_templates[template_name]
+        template_name = institution.prompt_template
+        return getattr(self.prompt_templates, template_name)
 
     def get_processed_prompt(self, institution_id: Optional[str] = None) -> str:
         """Get a prompt with all placeholders replaced with institution values."""
@@ -44,12 +37,12 @@ class InstitutionManager:
         template = self.get_prompt_template(institution_id)
 
         placeholders = {
-            "{{INSTITUTION_NAME}}": institution["name"],
-            "{{INSTITUTION_SHORT_NAME}}": institution["short_name"],
-            "{{ROLE}}": institution["role"],
-            "{{WEBSITE}}": institution["website"],
-            "{{ADMISSIONS_URL}}": institution["admissions_url"],
-            "{{PROGRAMS_URL}}": institution["programs_url"]
+            "{{INSTITUTION_NAME}}": institution.name,
+            "{{INSTITUTION_SHORT_NAME}}": institution.short_name,
+            "{{ROLE}}": institution.role,
+            "{{WEBSITE}}": institution.website,
+            "{{ADMISSIONS_URL}}": institution.admissions_url,
+            "{{PROGRAMS_URL}}": institution.programs_url
         }
 
         processed_template = template

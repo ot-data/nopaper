@@ -1,22 +1,27 @@
 import requests
 import json
 import time
+import pytest
+from tests.conftest import SERVER_URL
 
+@pytest.mark.integration
+@pytest.mark.http
+@pytest.mark.skip_if_no_server
 def test_query(query, personal_info, institution_id, session_id):
     # Prepare the request
-    url = "http://localhost:8000/chat"
+    url = f"{SERVER_URL}/chat"
     data = {
         'query': query,
         'personal_info': personal_info,
         'institution_id': institution_id,
         'session_id': session_id
     }
-    
+
     print(f"\nSending message with session_id: {session_id}")
-    
+
     # Send the request
     response = requests.post(url, json=data)
-    
+
     # Process the response
     if response.status_code == 200:
         print(f"\n\n===== QUERY: {query} =====")
@@ -49,13 +54,13 @@ def main():
         # First query - should be remembered
         "How can I complete the admission process?",
         # "Tell me about LPU's Computer Science program",
-        
+
         # # Memory query - should return the first question
         # "What was my previous question?",
-        
+
         # # Another regular query
         # "What are the career opportunities after completing B.Tech in Computer Science at LPU?",
-        
+
         # # Memory query again - should return the career opportunities question
         # "What was my last question?"
     ]

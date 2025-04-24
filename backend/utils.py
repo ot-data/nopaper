@@ -12,8 +12,7 @@ from config import get_full_config, set_aws_credentials
 
 def load_config():
     """
-    Load configuration directly from environment variables.
-    This replaces the previous YAML-based configuration approach.
+    Load configuration from the centralized Pydantic settings.
     """
     return get_full_config()
 

@@ -1,7 +1,13 @@
 import asyncio
+import pytest
 import websockets
 import json
+from tests.conftest import WEBSOCKET_URL
 
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.websocket
+@pytest.mark.skip_if_no_server
 async def test_query(websocket, query, session_id):
     # Send a message
     message = {
@@ -25,8 +31,12 @@ async def test_query(websocket, query, session_id):
     except Exception as e:
         print(f"\nError: {e}")
 
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.websocket
+@pytest.mark.skip_if_no_server
 async def test_websocket():
-    uri = "ws://localhost:8002/chat"  # Connect to our test server
+    uri = WEBSOCKET_URL  # Connect to our test server
     # Use a fixed session ID for consistent memory across requests
     session_id = "test_session_123"
 

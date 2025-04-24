@@ -1,26 +1,25 @@
-institutions:
-  lpu:
-    name: "Lovely Professional University"
-    short_name: "LPU"
-    role: "Career Counselor"
-    prompt_template: "standard_template"
-    website: "https://www.lpu.in"
-    admissions_url: "https://www.lpu.in/admission/"
-    programs_url: "https://www.lpu.in/programs/"
+"""
+Institution settings module using Pydantic's BaseSettings for type-safe configuration.
+This replaces the previous approach of using YAML files.
+"""
+from typing import Dict, Any, Optional
+from pydantic import Field, BaseModel
+from pydantic_settings import BaseSettings
+import os
 
-  amity:
-    name: "Amity University"
-    short_name: "AU"
-    role: "Academic Advisor"
-    prompt_template: "standard_template"
-    website: "https://www.amity.edu"
-    admissions_url: "https://www.amity.edu/admission/"
-    programs_url: "https://www.amity.edu/programs/"
+class InstitutionConfig(BaseModel):
+    """Configuration for an institution."""
+    name: str
+    short_name: str
+    role: str
+    prompt_template: str
+    website: str
+    admissions_url: str
+    programs_url: str
 
-# Add more institutions as needed
-
-prompt_templates:
-  standard_template: |
+class PromptTemplates(BaseModel):
+    """Prompt templates for institutions."""
+    standard_template: str = """
     You are a **{{ROLE}}** for **{{INSTITUTION_NAME}} ({{INSTITUTION_SHORT_NAME}})**, guiding students on career opportunities and academic programs.
 
     ## Scope of Knowledge:
@@ -49,7 +48,7 @@ prompt_templates:
     🎓 **Career Guidance at {{INSTITUTION_SHORT_NAME}}**
     - Begin with a personalized greeting if name is provided
     - Provide a brief introduction to the topic
-    - Present detailed information in bullet points, tailored to their situation
+    - Present  information in bullet points, tailored to their situation
     - Include specific details from the retrieved information
     - End with a personalized conclusion that connects to their academic/career goals
     - Suggest a relevant follow-up question based on their profile
@@ -77,3 +76,39 @@ prompt_templates:
     - For a Computer Science student interested in AI: "As a CS student with an interest in AI, you'll find {{INSTITUTION_SHORT_NAME}}'s specialized AI lab particularly valuable for your career goals."
     - For an international student: "As an international student, you'll benefit from {{INSTITUTION_SHORT_NAME}}'s dedicated International Student Office that provides specialized support."
     - For a student in early semesters: "Since you're in your early academic journey, I recommend focusing on foundational courses while exploring different specializations."
+    """
+
+class InstitutionSettings(BaseSettings):
+    """Institution settings."""
+    default_institution_id: str = Field(default=os.getenv("DEFAULT_INSTITUTION_ID", "lpu"), env="DEFAULT_INSTITUTION_ID", description="Default institution ID")
+    
+    institutions: Dict[str, InstitutionConfig] = {
+        "lpu": InstitutionConfig(
+            name="Lovely Professional University",
+            short_name="LPU",
+            role="Career Counselor",
+            prompt_template="standard_template",
+            website="https://www.lpu.in",
+            admissions_url="https://www.lpu.in/admission/",
+            programs_url="https://www.lpu.in/programs/"
+        ),
+        "amity": InstitutionConfig(
+            name="Amity University",
+            short_name="AU",
+            role="Academic Advisor",
+            prompt_template="standard_template",
+            website="https://www.amity.edu",
+            admissions_url="https://www.amity.edu/admission/",
+            programs_url="https://www.amity.edu/programs/"
+        )
+    }
+    
+    prompt_templates: PromptTemplates = PromptTemplates()
+    
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore"
+    }
+
+# Create a global settings instance
+institution_settings = InstitutionSettings()
